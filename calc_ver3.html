@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>履歴付き計算アプリ（削除機能付き＋並び替え）</title>
+  <link rel="stylesheet" href="../style.css">
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <style>
+    .calculator {
+      max-width: 400px;
+      margin: 40px auto;
+      padding: 20px;
+      border: 2px solid #ccc;
+      border-radius: 10px;
+      background: #f9f9f9;
+      text-align: center;
+    }
+    .calculator input {
+      width: 80px;
+      margin: 5px;
+      padding: 8px;
+      font-size: 1rem;
+    }
+    .calculator button {
+      margin: 5px;
+      padding: 8px 16px;
+      font-size: 1rem;
+    }
+    .result {
+      margin-top: 20px;
+      font-size: 1.2rem;
+      font-weight: bold;
+    }
+    .history {
+      margin-top: 40px;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .history-entry {
+      border: 1px solid #ddd;
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #fff;
+      position: relative;
+    }
+    .history-entry textarea {
+      width: 100%;
+      margin-top: 8px;
+      padding: 6px;
+      resize: vertical;
+    }
+    .delete-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background-color: #ff5555;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+<div id="header-placeholder"></div>
+<div class="page-wrapper">
+  <aside id="sidebar"></aside>
+  <div class="content-wrapper">
+    <div class="main">
+      <div class="calculator">
+        <h2>履歴付き計算アプリ</h2>
+        <input type="number" id="num1" placeholder="数値1">
+        <input type="number" id="num2" placeholder="数値2"><br>
+        <button onclick="calculate('+')">＋</button>
+        <button onclick="calculate('-')">−</button>
+        <button onclick="calculate('*')">×</button>
+        <button onclick="calculate('/')">÷</button>
+        <div class="result" id="result">答え： </div>
+      </div>
+
+      <div class="history" id="history">
+        <h3 style="display:flex;justify-content:space-between;align-items:center;">
+          計算履歴
+        </h3>
+
+        <div id="history-entries"></div>
+        <div style="text-align:center; margin-top:10px;">
+          <button onclick="clearAllHistory()" style="font-size:0.9rem;padding:4px 10px;background:#aaa;color:#fff;border:none;border-radius:4px;cursor:pointer;">
+            すべて削除
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../load_header.js"></script>
+<script>
+  window.addEventListener("DOMContentLoaded", () => {
+    renderAllHistory();
+  });
+
+  function calculate(operator) {
+    const num1 = parseFloat(document.getElementById("num1").value);
+    const num2 = parseFloat(document.getElementById("num2").value);
+    const resultBox = document.getElementById("result");
+    let result;
+
+    if (isNaN(num1) || isNaN(num2)) {
+      resultBox.textContent = "答え： 数値を入力してください";
+      return;
+    }
+
+    switch (operator) {
+      case '+': result = num1 + num2; break;
+      case '-': result = num1 - num2; break;
+      case '*': result = num1 * num2; break;
+      case '/': result = (num2 === 0) ? "0で割れません" : (num1 / num2); break;
+    }
+
+    resultBox.textContent = "答え： " + result;
+
+    const entry = {
+      id: Date.now(),
+      formula: `${num1} ${operator} ${num2}`,
+      result: result,
+      comment: ""
+    };
+
+    saveEntry(entry);
+    renderAllHistory();
+  }
+
+function renderAllHistory() {
+  const container = document.getElementById("history-entries");
+  container.innerHTML = "";
+
+  const historyArray = JSON.parse(localStorage.getItem("calcHistory")) || [];
+
+  historyArray.forEach(entry => {
+    const div = document.createElement("div");
+    div.className = "history-entry";
+    div.dataset.id = entry.id;
+
+    div.innerHTML = `
+      <button class="delete-btn" onclick="deleteEntry(${entry.id})">削除</button>
+      <div>計算式： ${entry.formula} = ${entry.result}</div>
+      <textarea placeholder="コメントを入力..." rows="2">${entry.comment || ""}</textarea>
+    `;
+
+    const textarea = div.querySelector("textarea");
+    textarea.addEventListener("input", () => {
+      updateComment(entry.id, textarea.value);
+    });
+
+    container.appendChild(div);
+  });
+
+  // ← ここが「履歴出力後」です！
+  // SortableJS によるドラッグ操作の有効化
+  Sortable.create(container, {
+    animation: 150,
+    onEnd: saveSortedOrder
+  });
+}
+
+  function saveEntry(entry) {
+    const historyArray = JSON.parse(localStorage.getItem("calcHistory")) || [];
+    historyArray.push(entry);
+    localStorage.setItem("calcHistory", JSON.stringify(historyArray));
+  }
+
+  function updateComment(id, newComment) {
+    let historyArray = JSON.parse(localStorage.getItem("calcHistory")) || [];
+    historyArray = historyArray.map(entry =>
+      entry.id === id ? { ...entry, comment: newComment } : entry
+    );
+    localStorage.setItem("calcHistory", JSON.stringify(historyArray));
+  }
+
+  function deleteEntry(id) {
+    let historyArray = JSON.parse(localStorage.getItem("calcHistory")) || [];
+    historyArray = historyArray.filter(entry => entry.id !== id);
+    localStorage.setItem("calcHistory", JSON.stringify(historyArray));
+    renderAllHistory();
+  }
+
+  function clearAllHistory() {
+    if (confirm("すべての履歴を削除しますか？")) {
+      localStorage.removeItem("calcHistory");
+      renderAllHistory();
+    }
+  }
+
+function saveSortedOrder() {
+  const container = document.getElementById("history-entries");
+  const newOrder = Array.from(container.children).map(div => parseInt(div.dataset.id));
+  let historyArray = JSON.parse(localStorage.getItem("calcHistory")) || [];
+
+  const reordered = newOrder.map(id => historyArray.find(entry => entry.id === id));
+  localStorage.setItem("calcHistory", JSON.stringify(reordered));
+}
+
+
+</script>
+</body>
+</html>
